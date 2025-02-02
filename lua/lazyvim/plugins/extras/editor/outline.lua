@@ -1,30 +1,34 @@
 return {
+  -- Disable `<leader>cs` keymap so it doesn't conflict with `outline.nvim`
+  {
+    "folke/trouble.nvim",
+    optional = true,
+    keys = {
+      { "<leader>cs", false },
+    },
+  },
   {
     "hedyhli/outline.nvim",
     keys = { { "<leader>cs", "<cmd>Outline<cr>", desc = "Toggle Outline" } },
     cmd = "Outline",
     opts = function()
-      local Config = require("lazyvim.config")
       local defaults = require("outline.config").defaults
       local opts = {
-        symbols = {},
-        symbol_blacklist = {},
+        symbols = {
+          icons = {},
+          filter = vim.deepcopy(LazyVim.config.kind_filter),
+        },
+        keymaps = {
+          up_and_jump = "<up>",
+          down_and_jump = "<down>",
+        },
       }
-      local filter = Config.kind_filter
 
-      if type(filter) == "table" then
-        filter = filter.default
-        if type(filter) == "table" then
-          for kind, symbol in pairs(defaults.symbols) do
-            opts.symbols[kind] = {
-              icon = Config.icons.kinds[kind] or symbol.icon,
-              hl = symbol.hl,
-            }
-            if not vim.tbl_contains(filter, kind) then
-              table.insert(opts.symbol_blacklist, kind)
-            end
-          end
-        end
+      for kind, symbol in pairs(defaults.symbols.icons) do
+        opts.symbols.icons[kind] = {
+          icon = LazyVim.config.icons.kinds[kind] or symbol.icon,
+          hl = symbol.hl,
+        }
       end
       return opts
     end,

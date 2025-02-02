@@ -7,6 +7,8 @@ local function have(path)
 end
 
 return {
+  recommended = true,
+  desc = "Language support for dotfiles",
   {
     "neovim/nvim-lspconfig",
     opts = {
@@ -17,10 +19,7 @@ return {
   },
   {
     "williamboman/mason.nvim",
-    opts = function(_, opts)
-      opts.ensure_installed = opts.ensure_installed or {}
-      vim.list_extend(opts.ensure_installed, { "shellcheck" })
-    end,
+    opts = { ensure_installed = { "shellcheck" } },
   },
   -- add some stuff to treesitter
   {
@@ -40,11 +39,12 @@ return {
         pattern = {
           [".*/waybar/config"] = "jsonc",
           [".*/mako/config"] = "dosini",
-          [".*/kitty/.+%.conf"] = "bash",
+          [".*/kitty/.+%.conf"] = "kitty",
           [".*/hypr/.+%.conf"] = "hyprlang",
           ["%.env%.[%w_.-]+"] = "sh",
         },
       })
+      vim.treesitter.language.register("bash", "kitty")
 
       add("git_config")
 

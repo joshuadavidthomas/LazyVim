@@ -1,6 +1,43 @@
 ---@class lazyvim.util.cmp
 local M = {}
 
+---@alias lazyvim.util.cmp.Action fun():boolean?
+---@type table<string, lazyvim.util.cmp.Action>
+M.actions = {
+  -- Native Snippets
+  snippet_forward = function()
+    if vim.snippet.active({ direction = 1 }) then
+      vim.schedule(function()
+        vim.snippet.jump(1)
+      end)
+      return true
+    end
+  end,
+  snippet_stop = function()
+    if vim.snippet then
+      vim.snippet.stop()
+    end
+  end,
+}
+
+---@param actions string[]
+---@param fallback? string|fun()
+function M.map(actions, fallback)
+  return function()
+    for _, name in ipairs(actions) do
+      if M.actions[name] then
+        local ret = M.actions[name]()
+        if ret then
+          return true
+        end
+      end
+    end
+    return type(fallback) == "function" and fallback() or fallback
+  end
+end
+
+---@alias Placeholder {n:number, text:string}
+
 ---@param snippet string
 ---@param fn fun(placeholder:Placeholder):string
 ---@return string
@@ -15,16 +52,21 @@ end
 ---@param snippet string
 ---@return string
 function M.snippet_preview(snippet)
-  local ret = M.snippet_replace(snippet, function(placeholder)
-    return M.snippet_preview(placeholder.text)
-  end):gsub("%$0", "")
-  return ret
+  local ok, parsed = pcall(function()
+    return vim.lsp._snippet_grammar.parse(snippet)
+  end)
+  return ok and tostring(parsed)
+    or M.snippet_replace(snippet, function(placeholder)
+      return M.snippet_preview(placeholder.text)
+    end):gsub("%$0", "")
 end
 
 -- This function replaces nested placeholders in a snippet with LSP placeholders.
 function M.snippet_fix(snippet)
+  local texts = {} ---@type table<number, string>
   return M.snippet_replace(snippet, function(placeholder)
-    return "${" .. placeholder.n .. ":" .. M.snippet_preview(placeholder.text) .. "}"
+    texts[placeholder.n] = texts[placeholder.n] or M.snippet_preview(placeholder.text)
+    return "${" .. placeholder.n .. ":" .. texts[placeholder.n] .. "}"
   end)
 end
 
@@ -86,12 +128,20 @@ function M.confirm(opts)
 end
 
 function M.expand(snippet)
-  local ok = pcall(vim.snippet.expand, snippet)
+  -- Native sessions don't support nested snippet sessions.
+  -- Always use the top-level session.
+  -- Otherwise, when on the first placeholder and selecting a new completion,
+  -- the nested session will be used instead of the top-level session.
+  -- See: https://github.com/LazyVim/LazyVim/issues/3199
+  local session = vim.snippet.active() and vim.snippet._session or nil
+
+  local ok, err = pcall(vim.snippet.expand, snippet)
   if not ok then
     local fixed = M.snippet_fix(snippet)
     ok = pcall(vim.snippet.expand, fixed)
 
-    local msg = ok and "Failed to parse snippet,\nbut was able to fix it automatically." or "Failed to parse snippet."
+    local msg = ok and "Failed to parse snippet,\nbut was able to fix it automatically."
+      or ("Failed to parse snippet.\n" .. err)
 
     LazyVim[ok and "warn" or "error"](
       ([[%s
@@ -101,6 +151,38 @@ function M.expand(snippet)
       { title = "vim.snippet" }
     )
   end
+
+  -- Restore top-level session when needed
+  if session then
+    vim.snippet._session = session
+  end
+end
+
+---@param opts cmp.ConfigSchema | {auto_brackets?: string[]}
+function M.setup(opts)
+  for _, source in ipairs(opts.sources) do
+    source.group_index = source.group_index or 1
+  end
+
+  local parse = require("cmp.utils.snippet").parse
+  require("cmp.utils.snippet").parse = function(input)
+    local ok, ret = pcall(parse, input)
+    if ok then
+      return ret
+    end
+    return LazyVim.cmp.snippet_preview(input)
+  end
+
+  local cmp = require("cmp")
+  cmp.setup(opts)
+  cmp.event:on("confirm_done", function(event)
+    if vim.tbl_contains(opts.auto_brackets or {}, vim.bo.filetype) then
+      LazyVim.cmp.auto_brackets(event.entry)
+    end
+  end)
+  cmp.event:on("menu_opened", function(event)
+    LazyVim.cmp.add_missing_snippet_docs(event.window)
+  end)
 end
 
 return M

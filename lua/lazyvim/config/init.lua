@@ -3,7 +3,7 @@ _G.LazyVim = require("lazyvim.util")
 ---@class LazyVimConfig: LazyVimOptions
 local M = {}
 
-M.version = "10.21.1" -- x-release-please-version
+M.version = "14.9.0" -- x-release-please-version
 LazyVim.config = M
 
 ---@class LazyVimOptions
@@ -32,6 +32,9 @@ local defaults = {
   icons = {
     misc = {
       dots = "󰇘",
+    },
+    ft = {
+      octo = "",
     },
     dap = {
       Stopped             = { "󰁕 ", "DiagnosticWarn", "DapStoppedLine" },
@@ -82,9 +85,10 @@ local defaults = {
       Package       = " ",
       Property      = " ",
       Reference     = " ",
-      Snippet       = " ",
+      Snippet       = "󱄽 ",
       String        = " ",
       Struct        = "󰆼 ",
+      Supermaven    = " ",
       TabNine       = "󰏚 ",
       Text          = " ",
       TypeParameter = " ",
@@ -132,7 +136,8 @@ local defaults = {
 }
 
 M.json = {
-  version = 4,
+  version = 7,
+  path = vim.g.lazyvim_json or vim.fn.stdpath("config") .. "/lazyvim.json",
   data = {
     version = nil, ---@type string?
     news = {}, ---@type table<string, string>
@@ -141,8 +146,7 @@ M.json = {
 }
 
 function M.json.load()
-  local path = vim.fn.stdpath("config") .. "/lazyvim.json"
-  local f = io.open(path, "r")
+  local f = io.open(M.json.path, "r")
   if f then
     local data = f:read("*a")
     f:close()
@@ -158,6 +162,7 @@ end
 
 ---@type LazyVimOptions
 local options
+local lazy_clipboard
 
 ---@param opts? LazyVimOptions
 function M.setup(opts)
@@ -178,6 +183,9 @@ function M.setup(opts)
         M.load("autocmds")
       end
       M.load("keymaps")
+      if lazy_clipboard ~= nil then
+        vim.opt.clipboard = lazy_clipboard
+      end
 
       LazyVim.format.setup()
       LazyVim.news.setup()
@@ -245,16 +253,17 @@ function M.load(name)
       end, { msg = "Failed loading " .. mod })
     end
   end
+  local pattern = "LazyVim" .. name:sub(1, 1):upper() .. name:sub(2)
   -- always load lazyvim, then user file
   if M.defaults[name] or name == "options" then
     _load("lazyvim.config." .. name)
+    vim.api.nvim_exec_autocmds("User", { pattern = pattern .. "Defaults", modeline = false })
   end
   _load("config." .. name)
   if vim.bo.filetype == "lazy" then
     -- HACK: LazyVim may have overwritten options of the Lazy ui, so reset this here
     vim.cmd([[do VimResized]])
   end
-  local pattern = "LazyVim" .. name:sub(1, 1):upper() .. name:sub(2)
   vim.api.nvim_exec_autocmds("User", { pattern = pattern, modeline = false })
 end
 
@@ -281,6 +290,9 @@ function M.init()
   -- this is needed to make sure options will be correctly applied
   -- after installing missing plugins
   M.load("options")
+  -- defer built-in clipboard handling: "xsel" and "pbcopy" can be slow
+  lazy_clipboard = vim.opt.clipboard
+  vim.opt.clipboard = ""
 
   if vim.g.deprecation_warnings == false then
     vim.deprecate = function() end

@@ -9,11 +9,7 @@ return {
   { "Hoffs/omnisharp-extended-lsp.nvim", lazy = true },
   {
     "nvim-treesitter/nvim-treesitter",
-    opts = function(_, opts)
-      if type(opts.ensure_installed) == "table" then
-        vim.list_extend(opts.ensure_installed, { "c_sharp" })
-      end
-    end,
+    opts = { ensure_installed = { "c_sharp" } },
   },
   {
     "nvimtools/none-ls.nvim",
@@ -41,11 +37,7 @@ return {
   },
   {
     "williamboman/mason.nvim",
-    opts = function(_, opts)
-      if type(opts.ensure_installed) == "table" then
-        vim.list_extend(opts.ensure_installed, { "netcoredbg", "csharpier" })
-      end
-    end,
+    opts = { ensure_installed = { "csharpier", "netcoredbg" } },
   },
   {
     "neovim/nvim-lspconfig",
@@ -60,8 +52,10 @@ return {
           keys = {
             {
               "gd",
-              function()
+              LazyVim.has("telescope.nvim") and function()
                 require("omnisharp_extended").telescope_lsp_definitions()
+              end or function()
+                require("omnisharp_extended").lsp_definitions()
               end,
               desc = "Goto Definition",
             },
@@ -83,6 +77,9 @@ return {
           type = "executable",
           command = vim.fn.exepath("netcoredbg"),
           args = { "--interpreter=vscode" },
+          options = {
+            detached = false,
+          },
         }
       end
       for _, lang in ipairs({ "cs", "fsharp", "vb" }) do

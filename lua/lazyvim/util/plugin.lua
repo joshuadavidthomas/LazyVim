@@ -3,6 +3,9 @@ local Plugin = require("lazy.core.plugin")
 ---@class lazyvim.util.plugin
 local M = {}
 
+---@type string[]
+M.core_imports = {}
+
 M.lazy_file_events = { "BufReadPost", "BufNewFile", "BufWritePre" }
 
 ---@type table<string, string>
@@ -13,13 +16,15 @@ M.deprecated_extras = {
   ["lazyvim.plugins.extras.coding.native_snippets"] = "Native snippets are now the default for **Neovim >= 0.10**",
   ["lazyvim.plugins.extras.ui.treesitter-rewrite"] = "Disabled `treesitter-rewrite` extra for now. Not ready yet.",
   ["lazyvim.plugins.extras.coding.mini-ai"] = "`mini.ai` is now a core LazyVim plugin (again)",
+  ["lazyvim.plugins.extras.lazyrc"] = "local spec files are now a lazy.nvim feature",
+  ["lazyvim.plugins.extras.editor.trouble-v3"] = "Trouble v3 has been merged in main",
+  ["lazyvim.plugins.extras.lang.python-semshi"] = [[The python-semshi extra has been removed,
+  because it's causing too many issues.
+  Either use `basedpyright`, or copy the [old extra](https://github.com/LazyVim/LazyVim/blob/c1f5fcf9c7ed2659c9d5ac41b3bb8a93e0a3c6a0/lua/lazyvim/plugins/extras/lang/python-semshi.lua#L1) to your own config.
+  ]],
 }
 
-M.deprecated_modules = {
-  ["null-ls"] = "lsp.none-ls",
-  ["nvim-navic.lib"] = "editor.navic",
-  ["nvim-navic"] = "editor.navic",
-}
+M.deprecated_modules = {}
 
 ---@type table<string, string>
 M.renames = {
@@ -28,7 +33,15 @@ M.renames = {
   ["null-ls.nvim"] = "none-ls.nvim",
   ["romgrk/nvim-treesitter-context"] = "nvim-treesitter/nvim-treesitter-context",
   ["glepnir/dashboard-nvim"] = "nvimdev/dashboard-nvim",
+  ["markdown.nvim"] = "render-markdown.nvim",
 }
+
+function M.save_core()
+  if vim.v.vim_did_enter == 1 then
+    return
+  end
+  M.core_imports = vim.deepcopy(require("lazy.core.config").spec.modules)
+end
 
 function M.setup()
   M.fix_imports()
@@ -58,31 +71,6 @@ function M.extra_idx(name)
 end
 
 function M.lazy_file()
-  -- This autocmd will only trigger when a file was loaded from the cmdline.
-  -- It will render the file as quickly as possible.
-  vim.api.nvim_create_autocmd("BufReadPost", {
-    once = true,
-    callback = function(event)
-      -- Skip if we already entered vim
-      if vim.v.vim_did_enter == 1 then
-        return
-      end
-
-      -- Try to guess the filetype (may change later on during Neovim startup)
-      local ft = vim.filetype.match({ buf = event.buf })
-      if ft then
-        -- Add treesitter highlights and fallback to syntax
-        local lang = vim.treesitter.language.get_lang(ft)
-        if not (lang and pcall(vim.treesitter.start, event.buf, lang)) then
-          vim.bo[event.buf].syntax = ft
-        end
-
-        -- Trigger early redraw
-        vim.cmd([[redraw]])
-      end
-    end,
-  })
-
   -- Add support for the LazyFile event
   local Event = require("lazy.core.handler.event")
 
