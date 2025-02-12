@@ -7,10 +7,10 @@ return {
     "ggandor/flit.nvim",
     enabled = true,
     keys = function()
-      ---@type LazyKeys[]
+      ---@type LazyKeysSpec[]
       local ret = {}
       for _, key in ipairs({ "f", "F", "t", "T" }) do
-        ret[#ret + 1] = { key, mode = { "n", "x", "o" }, desc = key }
+        ret[#ret + 1] = { key, mode = { "n", "x", "o" } }
       end
       return ret
     end,
@@ -50,14 +50,8 @@ return {
         update_n_lines = "gzn", -- Update `n_lines`
       },
     },
-  },
-  {
-    "folke/which-key.nvim",
-    optional = true,
-    opts = {
-      defaults = {
-        ["gz"] = { name = "+surround" },
-      },
+    keys = {
+      { "gz", "", desc = "+surround" },
     },
   },
 

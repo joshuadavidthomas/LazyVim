@@ -1,6 +1,4 @@
 local M = {}
----@type table<string, table<string, string[]>>
-M.dials_by_ft = {}
 
 ---@param increment boolean
 ---@param g? boolean
@@ -9,7 +7,7 @@ function M.dial(increment, g)
   -- Use visual commands for VISUAL 'v', VISUAL LINE 'V' and VISUAL BLOCK '\22'
   local is_visual = mode == "v" or mode == "V" or mode == "\22"
   local func = (increment and "inc" or "dec") .. (g and "_g" or "_") .. (is_visual and "visual" or "normal")
-  local group = M.dials_by_ft[vim.bo.filetype] or "default"
+  local group = vim.g.dials_by_ft[vim.bo.filetype] or "default"
   return require("dial.map")[func](group)
 end
 
@@ -100,34 +98,40 @@ return {
     return {
       dials_by_ft = {
         css = "css",
+        vue = "vue",
         javascript = "typescript",
+        typescript = "typescript",
+        typescriptreact = "typescript",
         javascriptreact = "typescript",
         json = "json",
         lua = "lua",
         markdown = "markdown",
-        python = "python",
         sass = "css",
         scss = "css",
-        typescript = "typescript",
-        typescriptreact = "typescript",
+        python = "python",
       },
       groups = {
         default = {
           augend.integer.alias.decimal, -- nonnegative decimal number (0, 1, 2, 3, ...)
+          augend.integer.alias.decimal_int, -- nonnegative and negative decimal number
           augend.integer.alias.hex, -- nonnegative hex number  (0x01, 0x1a1f, etc.)
           augend.date.alias["%Y/%m/%d"], -- date (2022/02/19, etc.)
-        },
-        typescript = {
-          augend.integer.alias.decimal, -- nonnegative and negative decimal number
-          augend.constant.alias.bool, -- boolean value (true <-> false)
-          logical_alias,
-          augend.constant.new({ elements = { "let", "const" } }),
           ordinal_numbers,
           weekdays,
           months,
+          capitalized_boolean,
+          augend.constant.alias.bool, -- boolean value (true <-> false)
+          logical_alias,
+        },
+        vue = {
+          augend.constant.new({ elements = { "let", "const" } }),
+          augend.hexcolor.new({ case = "lower" }),
+          augend.hexcolor.new({ case = "upper" }),
+        },
+        typescript = {
+          augend.constant.new({ elements = { "let", "const" } }),
         },
         css = {
-          augend.integer.alias.decimal, -- nonnegative and negative decimal number
           augend.hexcolor.new({
             case = "lower",
           }),
@@ -136,40 +140,39 @@ return {
           }),
         },
         markdown = {
+          augend.constant.new({
+            elements = { "[ ]", "[x]" },
+            word = false,
+            cyclic = true,
+          }),
           augend.misc.alias.markdown_header,
-          ordinal_numbers,
-          weekdays,
-          months,
         },
         json = {
-          augend.integer.alias.decimal, -- nonnegative and negative decimal number
           augend.semver.alias.semver, -- versioning (v1.1.2)
         },
         lua = {
-          augend.integer.alias.decimal, -- nonnegative and negative decimal number
-          augend.constant.alias.bool, -- boolean value (true <-> false)
           augend.constant.new({
             elements = { "and", "or" },
             word = true, -- if false, "sand" is incremented into "sor", "doctor" into "doctand", etc.
             cyclic = true, -- "or" is incremented into "and".
           }),
-          ordinal_numbers,
-          weekdays,
-          months,
         },
         python = {
-          augend.integer.alias.decimal, -- nonnegative and negative decimal number
-          capitalized_boolean,
-          logical_alias,
-          ordinal_numbers,
-          weekdays,
-          months,
+          augend.constant.new({
+            elements = { "and", "or" },
+          }),
         },
       },
     }
   end,
   config = function(_, opts)
+    -- copy defaults to each group
+    for name, group in pairs(opts.groups) do
+      if name ~= "default" then
+        vim.list_extend(group, opts.groups.default)
+      end
+    end
     require("dial.config").augends:register_group(opts.groups)
-    M.dials_by_ft = opts.dials_by_ft
+    vim.g.dials_by_ft = opts.dials_by_ft
   end,
 }
