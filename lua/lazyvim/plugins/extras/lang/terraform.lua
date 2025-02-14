@@ -8,14 +8,7 @@ return {
 
   {
     "nvim-treesitter/nvim-treesitter",
-    opts = function(_, opts)
-      if type(opts.ensure_installed) == "table" then
-        vim.list_extend(opts.ensure_installed, {
-          "terraform",
-          "hcl",
-        })
-      end
-    end,
+    opts = { ensure_installed = { "terraform", "hcl" } },
   },
   {
     "neovim/nvim-lspconfig",
@@ -28,10 +21,7 @@ return {
   -- ensure terraform tools are installed
   {
     "williamboman/mason.nvim",
-    opts = function(_, opts)
-      opts.ensure_installed = opts.ensure_installed or {}
-      vim.list_extend(opts.ensure_installed, { "tflint" })
-    end,
+    opts = { ensure_installed = { "tflint" } },
   },
   {
     "nvimtools/none-ls.nvim",
@@ -39,6 +29,7 @@ return {
     opts = function(_, opts)
       local null_ls = require("null-ls")
       opts.sources = vim.list_extend(opts.sources or {}, {
+        null_ls.builtins.formatting.packer,
         null_ls.builtins.formatting.terraform_fmt,
         null_ls.builtins.diagnostics.terraform_validate,
       })
@@ -59,6 +50,7 @@ return {
     optional = true,
     opts = {
       formatters_by_ft = {
+        hcl = { "packer_fmt" },
         terraform = { "terraform_fmt" },
         tf = { "terraform_fmt" },
         ["terraform-vars"] = { "terraform_fmt" },
@@ -67,9 +59,11 @@ return {
   },
   {
     "nvim-telescope/telescope.nvim",
-    dependencies = {
+    optional = true,
+    specs = {
       {
         "ANGkeith/telescope-terraform-doc.nvim",
+        ft = { "terraform", "hcl" },
         config = function()
           LazyVim.on_load("telescope.nvim", function()
             require("telescope").load_extension("terraform_doc")
@@ -78,6 +72,7 @@ return {
       },
       {
         "cappyzawa/telescope-terraform.nvim",
+        ft = { "terraform", "hcl" },
         config = function()
           LazyVim.on_load("telescope.nvim", function()
             require("telescope").load_extension("terraform")

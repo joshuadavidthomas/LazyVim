@@ -1,4 +1,3 @@
-local Config = require("lazyvim.config")
 local Float = require("lazy.view.float")
 local LazyConfig = require("lazy.core.config")
 local Plugin = require("lazy.core.plugin")
@@ -17,6 +16,7 @@ local Text = require("lazy.view.text")
 ---@field enabled boolean
 ---@field managed boolean
 ---@field recommended? boolean
+---@field imports string[]
 ---@field row? number
 ---@field section? string
 ---@field plugins string[]
@@ -36,7 +36,9 @@ M.ns = vim.api.nvim_create_namespace("lazyvim.extras")
 ---@type string[]
 M.state = nil
 
----@param opts {ft?: string|string[], root?: string|string[]}
+---@alias WantsOpts {ft?: string|string[], root?: string|string[]}
+
+---@param opts WantsOpts
 ---@return boolean
 function M.wants(opts)
   if opts.ft then
@@ -81,8 +83,18 @@ end
 ---@param modname string
 ---@param source LazyExtraSource
 function M.get_extra(source, modname)
+  LazyVim.plugin.handle_defaults = false
   local enabled = vim.tbl_contains(M.state, modname)
-  local spec = Plugin.Spec.new({ import = modname }, { optional = true })
+  local spec = Plugin.Spec.new(nil, { optional = true, pkg = false })
+  spec:parse({ import = modname })
+  local imports = vim.tbl_filter(function(x)
+    return x ~= modname
+  end, spec.modules)
+  if #imports > 0 then
+    spec = Plugin.Spec.new(nil, { optional = true, pkg = false })
+    spec.modules = vim.deepcopy(imports)
+    spec:parse({ import = modname })
+  end
   local plugins = {} ---@type string[]
   local optional = {} ---@type string[]
   for _, p in pairs(spec.plugins) do
@@ -95,10 +107,12 @@ function M.get_extra(source, modname)
   table.sort(plugins)
   table.sort(optional)
 
-  ---@type boolean|(fun():boolean?)|nil
+  ---@type boolean|(fun():boolean?)|nil|WantsOpts
   local recommended = require(modname).recommended or false
   if type(recommended) == "function" then
     recommended = recommended() or false
+  elseif type(recommended) == "table" then
+    recommended = M.wants(recommended)
   end
 
   ---@type LazyExtra
@@ -107,9 +121,10 @@ function M.get_extra(source, modname)
     name = modname:sub(#source.module + 2),
     module = modname,
     enabled = enabled,
+    imports = imports,
     desc = require(modname).desc,
     recommended = recommended,
-    managed = vim.tbl_contains(Config.json.data.extras, modname) or not enabled,
+    managed = vim.tbl_contains(LazyVim.config.json.data.extras, modname) or not enabled,
     plugins = plugins,
     optional = optional,
   }
@@ -154,17 +169,17 @@ function X:toggle()
         return
       end
       extra.enabled = not extra.enabled
-      Config.json.data.extras = vim.tbl_filter(function(name)
+      LazyVim.config.json.data.extras = vim.tbl_filter(function(name)
         return name ~= extra.module
-      end, Config.json.data.extras)
+      end, LazyVim.config.json.data.extras)
       M.state = vim.tbl_filter(function(name)
         return name ~= extra.module
       end, M.state)
       if extra.enabled then
-        table.insert(Config.json.data.extras, extra.module)
+        table.insert(LazyVim.config.json.data.extras, extra.module)
         M.state[#M.state + 1] = extra.module
       end
-      table.sort(Config.json.data.extras)
+      table.sort(LazyVim.config.json.data.extras)
       LazyVim.json.save()
       LazyVim.info(
         "`"
@@ -200,7 +215,7 @@ function X:update()
       diag.lnum = diag.row - 1
       return diag
     end, self.diag),
-    { signs = false, virtual_text = true }
+    { signs = false, virtual_text = true, underline = false }
   )
 end
 
@@ -218,8 +233,15 @@ function X:render()
   for _, extra in ipairs(self.extras) do
     extra.section = nil
   end
-  self:section({ enabled = true, title = "Enabled" })
-  self:section({ recommended = true, include = "^lang%.", title = "Recommended Languages", empty = false })
+  self:section({
+    recommended = true,
+    enabled = false,
+    include = "^lang%.",
+    title = "Recommended Languages",
+    empty = false,
+  })
+  self:section({ enabled = true, exclude = "^lang%.", title = "Enabled Plugins" })
+  self:section({ enabled = true, title = "Enabled Languages" })
   self:section({ recommended = true, title = "Recommended Plugins", empty = false })
   self:section({ title = "Plugins", exclude = "^lang%." })
   self:section({ title = "Languages" })
@@ -227,11 +249,34 @@ end
 
 ---@param extra LazyExtra
 function X:extra(extra)
+  local defaults = LazyVim.config.get_defaults()
+  local def = defaults[extra.module]
+  local origin = def and (def.origin or "user") or nil
   if not extra.managed then
-    self:diagnostic({
-      message = "Not managed by LazyExtras (config)",
-      severity = vim.diagnostic.severity.WARN,
-    })
+    ---@type LazyExtra[]
+    local parents = {}
+    for _, x in ipairs(self.extras) do
+      if x.enabled and vim.tbl_contains(x.imports, extra.module) then
+        parents[#parents + 1] = x
+      end
+    end
+    if #parents > 0 then
+      local pp = vim.tbl_map(function(x)
+        return x.name
+      end, parents)
+      self:diagnostic({
+        message = "Required by " .. table.concat(pp, ", "),
+      })
+    elseif vim.tbl_contains(LazyVim.plugin.core_imports, extra.module) or origin == "default" then
+      self:diagnostic({
+        message = "This extra is included by default",
+      })
+    else
+      self:diagnostic({
+        message = "Not managed by LazyExtras (config)",
+        severity = vim.diagnostic.severity.WARN,
+      })
+    end
   end
   extra.row = self.text:row()
   local hl = extra.managed and "LazySpecial" or "LazyLocal"
@@ -245,13 +290,17 @@ function X:extra(extra)
     self.text:append(" "):append(LazyConfig.options.ui.icons.favorite or " ", "LazyCommit")
   end
   if extra.source.name ~= "LazyVim" then
-    self.text:append(" "):append(LazyConfig.options.ui.icons.event .. " " .. extra.source.name, "LazyReasonEvent")
+    self.text:append(" "):append(LazyConfig.options.ui.icons.event .. extra.source.name, "LazyReasonEvent")
+  end
+  for _, import in ipairs(extra.imports) do
+    import = import:gsub("^lazyvim.plugins.extras.", "")
+    self.text:append(" "):append(LazyConfig.options.ui.icons.plugin .. import, "LazyReasonStart")
   end
   for _, plugin in ipairs(extra.plugins) do
-    self.text:append(" "):append(LazyConfig.options.ui.icons.plugin .. "" .. plugin, "LazyReasonPlugin")
+    self.text:append(" "):append(LazyConfig.options.ui.icons.plugin .. plugin, "LazyReasonPlugin")
   end
   for _, plugin in ipairs(extra.optional) do
-    self.text:append(" "):append(LazyConfig.options.ui.icons.plugin .. "" .. plugin, "LazyReasonRequire")
+    self.text:append(" "):append(LazyConfig.options.ui.icons.plugin .. plugin, "LazyReasonRequire")
   end
   if extra.desc then
     self.text:nl():append("    " .. extra.desc, "LazyComment")

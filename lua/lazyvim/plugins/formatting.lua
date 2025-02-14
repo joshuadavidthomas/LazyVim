@@ -1,31 +1,18 @@
 local M = {}
 
----@param opts ConformOpts
+---@param opts conform.setupOpts
 function M.setup(_, opts)
-  for name, formatter in pairs(opts.formatters or {}) do
-    if type(formatter) == "table" then
-      ---@diagnostic disable-next-line: undefined-field
-      if formatter.extra_args then
-        ---@diagnostic disable-next-line: undefined-field
-        formatter.prepend_args = formatter.extra_args
-        LazyVim.deprecate(
-          ("opts.formatters.%s.extra_args"):format(name),
-          ("opts.formatters.%s.prepend_args"):format(name)
-        )
-      end
-    end
-  end
-
   for _, key in ipairs({ "format_on_save", "format_after_save" }) do
     if opts[key] then
-      LazyVim.warn(
-        ("Don't set `opts.%s` for `conform.nvim`.\n**LazyVim** will use the conform formatter automatically"):format(
-          key
-        )
-      )
+      local msg = "Don't set `opts.%s` for `conform.nvim`.\n**LazyVim** will use the conform formatter automatically"
+      LazyVim.warn(msg:format(key))
       ---@diagnostic disable-next-line: no-unknown
       opts[key] = nil
     end
+  end
+  ---@diagnostic disable-next-line: undefined-field
+  if opts.format then
+    LazyVim.warn("**conform.nvim** `opts.format` is deprecated. Please use `opts.default_format_opts` instead.")
   end
   require("conform").setup(opts)
 end
@@ -54,8 +41,7 @@ return {
           priority = 100,
           primary = true,
           format = function(buf)
-            local opts = LazyVim.opts("conform.nvim")
-            require("conform").format(LazyVim.merge({}, opts.format, { bufnr = buf }))
+            require("conform").format({ bufnr = buf })
           end,
           sources = function(buf)
             local ret = require("conform").list_formatters(buf)
@@ -76,16 +62,14 @@ return {
           "Please refer to the docs at https://www.lazyvim.org/plugins/formatting",
         }, { title = "LazyVim" })
       end
-      ---@class ConformOpts
+      ---@type conform.setupOpts
       local opts = {
-        -- LazyVim will use these options when formatting with the conform.nvim formatter
-        format = {
+        default_format_opts = {
           timeout_ms = 3000,
           async = false, -- not recommended to change
           quiet = false, -- not recommended to change
-          lsp_fallback = true, -- not recommended to change
+          lsp_format = "fallback", -- not recommended to change
         },
-        ---@type table<string, conform.FormatterUnit[]>
         formatters_by_ft = {
           lua = { "stylua" },
           fish = { "fish_indent" },
