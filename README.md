@@ -69,7 +69,7 @@ You can find a starter template for **LazyVim** [here](https://github.com/LazyVi
 
 ```sh
 docker run -w /root -it --rm alpine:edge sh -uelic '
-  apk add git lazygit neovim ripgrep alpine-sdk --update
+  apk add git lazygit fzf curl neovim ripgrep alpine-sdk --update
   git clone https://github.com/LazyVim/starter ~/.config/nvim
   cd ~/.config/nvim
   nvim
@@ -114,6 +114,10 @@ docker run -w /root -it --rm alpine:edge sh -uelic '
 There's a great video created by [@elijahmanor](https://github.com/elijahmanor) with a walkthrough to get started.
 
 [![Watch the video](https://img.youtube.com/vi/N93cTbtLCIM/hqdefault.jpg)](https://www.youtube.com/watch?v=N93cTbtLCIM)
+
+[@dusty-phillips](https://github.com/dusty-phillips) wrote a comprehensive book called
+[LazyVim for Ambitious Developers](https://lazyvim-ambitious-devs.phillips.codes)
+available for free online.
 
 ## 📂 File Structure
 
